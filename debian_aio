@@ -690,9 +690,9 @@ DNS PUBLIC KEY : $(cat /root/.dns/server.pub)
 
 -----------------------
 
-FB Page : https://wa.me/+8801817554444
+FB Page : https://wa.me/+8801790026703
 
-For issues or suggestions please contact DIGITEL Systems (+8801817554444).
+For issues or suggestions please contact Dxplusdev(+8801790026703).
 
 " >> /root/.web/$secretkey.txt
 
