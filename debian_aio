@@ -690,7 +690,7 @@ DNS PUBLIC KEY : $(cat /root/.dns/server.pub)
 
 -----------------------
 
-FB Page : https://wa.me/+8801790026703
+Whatsapp : https://wa.me/+8801790026703
 
 For issues or suggestions please contact Dxplusdev(+8801790026703).
 
@@ -797,7 +797,7 @@ echo '{
   "up_mbps": 100,
   "down_mbps": 100,
   "disable_udp": false,
-  "obfs": "digitelsystems",
+  "obfs": "dxplusdev",
   "auth": {
     "mode": "external",
     "config": {
@@ -810,7 +810,7 @@ echo '{
 }
 ' >> /etc/hysteria/config.json
 
-sed -i "s|digitelsystems|$OBFS|g" /etc/hysteria/config.json
+sed -i "s|dxplusdev|$OBFS|g" /etc/hysteria/config.json
 
 cat <<"EOM" >/etc/hysteria/.auth.sh
 #!/bin/bash
@@ -879,7 +879,7 @@ echo '{
   "listen": ":5666",
   "cert": "/etc/zivpn/zivpn.crt",
   "key":  "/etc/zivpn/zivpn.key",
-  "obfs":"digitelsystems",
+  "obfs":"dxplusdev",
   "auth": {
     "mode": "external",
     "config": {
@@ -889,7 +889,7 @@ echo '{
 }
 ' >> /etc/zivpn/config.json
 
-sed -i "s|digitelsystems|$OBFS|g" /etc/zivpn/config.json
+sed -i "s|dxplusdev|$OBFS|g" /etc/zivpn/config.json
 
 cat <<EOF > /etc/systemd/system/hysteria-server.service
 [Unit]
