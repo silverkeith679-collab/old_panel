@@ -34,10 +34,10 @@ base_package() {
 first_setup(){
     echo 'set +o history' >> /etc/profile
     timedatectl set-timezone Asia/Riyadh
-    wget -O /etc/banner "https://hptunnel.xyz/dxplusdev/xxxxxx/banner" >/dev/null 2>&1
+    wget -O /etc/banner "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/banner" >/dev/null 2>&1
     chmod +x /etc/banner
-    wget -O /etc/ssh/sshd_config "https://hptunnel.xyz/dxplusdev/xxxxxx/sshd_config" >/dev/null 2>&1
-    wget -q -O /etc/ipserver "https://hptunnel.xyz/dxplusdev/xxxxxx/ipserver" && bash /etc/ipserver >/dev/null 2>&1
+    wget -O /etc/ssh/sshd_config "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/sshd_config" >/dev/null 2>&1
+    wget -q -O /etc/ipserver "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/ipserver" && bash /etc/ipserver >/dev/null 2>&1
     chmod 644 /etc/ssh/sshd_config
     
     useradd -M firenet
@@ -71,8 +71,8 @@ chmod 755 /usr/share/squid/errors/English/*
 service restart squid
 cd /etc || exit
 
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/monitorzzz' -O /etc/.monitor
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/xray' -O /etc/.xray
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/monitorzzz' -O /etc/.monitor
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/xray' -O /etc/.xray
 chmod +x /etc/.monitor
 chmod +x /etc/.xray
 rm /etc/apt/sources.list
@@ -80,7 +80,7 @@ sudo cp /etc/apt/sources.list_backup /etc/apt/sources.list
 }
 
 install_vnstat(){
-wget -O /etc/vnstat-2.6.tar.gz https://hptunnel.xyz/dxplusdev/xxxxxx/vnstat-2.6.tar.gz
+wget -O /etc/vnstat-2.6.tar.gz https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/vnstat-2.6.tar.gz
 sudo apt-get install build-essential gd gd-devel libsqlite3-dev
 tar -xvf /etc/vnstat-2.6.tar.gz
 cd /etc/vnstat-2.6/
@@ -114,7 +114,7 @@ install_xray(){
     curl -sL "$xraycore_link" -o xray
     mv xray /usr/sbin/xray
     
-    wget -O /etc/xray/config.json "https://hptunnel.xyz/dxplusdev/xxxxxx/xray_config.json" >/dev/null 2>&1
+    wget -O /etc/xray/config.json "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/xray_config.json" >/dev/null 2>&1
     sed -i "s/xxxFirenetxxx/$UUID/g" /etc/xray/config.json
     
     # > Set Permission
@@ -172,10 +172,10 @@ install_ssl() {
     ~/.acme.sh/acme.sh --installcert -d $DOMAIN --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key --ecc
     chmod 777 /etc/xray/xray.key
     
-    wget -O /etc/nginx/conf.d/firenet.conf "https://hptunnel.xyz/dxplusdev/xxxxxx/firenet.conf" >/dev/null 2>&1
+    wget -O /etc/nginx/conf.d/firenet.conf "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/firenet.conf" >/dev/null 2>&1
     sed -i "s/xxx/$DOMAIN/g" /etc/nginx/conf.d/firenet.conf
-    wget -O /etc/nginx/nginx.conf "https://hptunnel.xyz/dxplusdev/xxxxxx/nginx.conf" >/dev/null 2>&1
-    wget -O /etc/firenet/.version "https://hptunnel.xyz/dxplusdev/xxxxxx/version" >/dev/null 2>&1
+    wget -O /etc/nginx/nginx.conf "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/nginx.conf" >/dev/null 2>&1
+    wget -O /etc/firenet/.version "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/version" >/dev/null 2>&1
     
     vnstat -u -i $NET
     sed -i 's/Interface "'""eth0""'"/Interface "'""$NET""'"/g' /etc/vnstat.conf
@@ -185,7 +185,7 @@ install_ssl() {
 
 ### Additional
 additional(){
-    wget -O /usr/sbin/speedtest "https://hptunnel.xyz/dxplusdev/xxxxxx/speedtest" >/dev/null 2>&1
+    wget -O /usr/sbin/speedtest "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/speedtest" >/dev/null 2>&1
     chmod +x /usr/sbin/speedtest
 
     # > install gotop
@@ -195,7 +195,7 @@ additional(){
     dpkg -i /tmp/gotop.deb >/dev/null 2>&1
 
     # > Install BBR Plus
-    wget -qO /tmp/bbr.sh "https://hptunnel.xyz/dxplusdev/xxxxxx/bbr.sh" >/dev/null 2>&1
+    wget -qO /tmp/bbr.sh "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/bbr.sh" >/dev/null 2>&1
     chmod +x /tmp/bbr.sh && bash /tmp/bbr.sh
 
     # > Make a swap of 1G
@@ -248,7 +248,7 @@ enable_services(){
 }
 
 install_rclone() {
-    curl "https://hptunnel.xyz/dxplusdev/xxxxxx/rclone" | bash >/dev/null 2>&1
+    curl "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/rclone" | bash >/dev/null 2>&1
 }
 
 finish_script(){
