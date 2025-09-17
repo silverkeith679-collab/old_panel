@@ -56,7 +56,7 @@ echo "deb http://ftp.debian.org/debian/ jessie main contrib non-free
     update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 30
     update-alternatives --set c++ /usr/bin/g++
     cd /usr/src
-    wget https://hptunnel.xyz/dxplusdev/xxxxxx/squid-3.1.23.tar.gz
+    wget https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid-3.1.23.tar.gz
     tar zxvf squid-3.1.23.tar.gz
     cd squid-3.1.23
     ./configure --prefix=/usr \
@@ -70,7 +70,7 @@ echo "deb http://ftp.debian.org/debian/ jessie main contrib non-free
       --with-pidfile=/var/run/squid.pid
     make -j$(nproc)
     make install
-    wget --no-check-certificate -O /etc/init.d/squid https://hptunnel.xyz/dxplusdev/xxxxxx/squid.sh
+    wget --no-check-certificate -O /etc/init.d/squid https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid.sh
     chmod +x /etc/init.d/squid
     update-rc.d squid defaults
     chown -cR proxy /var/log/squid
@@ -99,7 +99,7 @@ error_directory /usr/share/squid/errors/English' >> squid.conf
     chmod 755 *
     /etc/init.d/squid start
 cd /etc || exit
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/monitor' -O /etc/.monitor
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/monitor' -O /etc/.monitor
 chmod +x /etc/.monitor
 rm /etc/apt/sources.list
 sudo cp /etc/apt/sources.list_backup /etc/apt/sources.list
@@ -118,8 +118,8 @@ install_UDP(){
 mkdir $udp_file
 chmod -R +x $udp_file
 
-wget -O /usr/bin/udpServer 'https://hptunnel.xyz/dxplusdev/xxxxxx/udpServer'
-wget -O $udp_file/limitador.sh 'https://hptunnel.xyz/dxplusdev/xxxxxx/limitador.sh'
+wget -O /usr/bin/udpServer 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/udpServer'
+wget -O $udp_file/limitador.sh 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/limitador.sh'
 
 chmod +x /usr/bin/udpServer
 chmod +x $udp_file/limitador.sh
