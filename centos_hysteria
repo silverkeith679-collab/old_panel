@@ -29,7 +29,7 @@ echo 'Installing proxy.'
 {
 yum groupinstall 'Development Tools' -y
 yum-builddep squid -y
-wget -qO squid.tar.gz 'https://hptunnel.xyz/dxplusdev/xxxxxx/squid-3.1.23.tar.gz'
+wget -qO squid.tar.gz 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid-3.1.23.tar.gz'
 tar xzf squid.tar.gz
 rm -f squid.tar.gz
 cd squid-3.1.23
@@ -71,8 +71,8 @@ chkconfig squid on
 service squid restart
 cd /etc || exit
 
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/monitor' -O /etc/.monitor
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/hysteria' -O /etc/.hysteria
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/monitor' -O /etc/.monitor
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/hysteria' -O /etc/.hysteria
 chmod +x /etc/.monitor
 chmod +x /etc/.hysteria
 
@@ -110,7 +110,7 @@ install_hysteria(){
 clear
 echo 'Installing hysteria.'
 {
-wget -N --no-check-certificate -q -O ~/install_server.sh https://hptunnel.xyz/dxplusdev/xxxxxx/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
+wget -N --no-check-certificate -q -O ~/install_server.sh https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
 
 echo "Generating cert files:"
 openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=PH/ST=Cebu/L=Central Visayas/O=Firenet Developer/OU=IT Department/CN=firenet" -keyout "/etc/hysteria/hysteria.key" -out "/etc/hysteria/hysteria.crt"
@@ -168,7 +168,7 @@ chmod 755 /etc/hysteria/hysteria.crt
 chmod 755 /etc/hysteria/hysteria.key
 chmod 755 /etc/hysteria/.auth.sh
 
-wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 } &>/dev/null
 }
@@ -272,7 +272,7 @@ chmod 755 /etc/zivpn/.auth.sh
 chmod 755 /etc/zivpn/zivpn.crt
 chmod 755 /etc/zivpn/zivpn.key
 
-wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 
 } &>/dev/null
