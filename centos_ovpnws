@@ -29,7 +29,7 @@ echo 'Installing proxy.'
 {
 yum groupinstall 'Development Tools' -y
 yum-builddep squid -y
-wget -qO squid.tar.gz 'https://hptunnel.xyz/dxplusdev/xxxxxx/squid-3.1.23.tar.gz'
+wget -qO squid.tar.gz 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid-3.1.23.tar.gz'
 tar xzf squid.tar.gz
 rm -f squid.tar.gz
 cd squid-3.1.23
@@ -71,12 +71,12 @@ chkconfig squid on
 service squid restart
 cd /etc || exit
 
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/socks.py' -O /etc/socks.py
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/socks.py' -O /etc/socks.py
 dos2unix /etc/socks.py
 chmod +x /etc/socks.py
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/monitor' -O /etc/.monitor
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/ws' -O /etc/.ws
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/hysteria' -O /etc/.hysteria
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/monitor' -O /etc/.monitor
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/ws' -O /etc/.ws
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/hysteria' -O /etc/.hysteria
 chmod +x /etc/.monitor
 chmod +x /etc/.ws
 chmod +x /etc/.hysteria
@@ -653,7 +653,7 @@ install_hysteria(){
 clear
 echo 'Installing hysteria.'
 {
-wget -N --no-check-certificate -q -O ~/install_server.sh https://hptunnel.xyz/dxplusdev/xxxxxx/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
+wget -N --no-check-certificate -q -O ~/install_server.sh https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
 
 rm -f /etc/hysteria/config.json
 
@@ -707,7 +707,7 @@ chmod 755 /etc/hysteria/.auth.sh
 sysctl -w net.core.rmem_max=16777216
 sysctl -w net.core.wmem_max=16777216
 
-wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 } &>/dev/null
 }
@@ -809,7 +809,7 @@ EOM
 
 chmod 755 /etc/zivpn/.auth.sh
 
-wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 
 } &>/dev/null
