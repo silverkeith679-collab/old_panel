@@ -38,7 +38,7 @@ echo "deb http://ftp.debian.org/debian/ jessie main contrib non-free
     update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 30
     update-alternatives --set c++ /usr/bin/g++
     cd /usr/src
-    wget https://hptunnel.xyz/dxplusdev/xxxxxx/squid-3.1.23.tar.gz
+    wget https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid-3.1.23.tar.gz
     tar zxvf squid-3.1.23.tar.gz
     cd squid-3.1.23
     ./configure --prefix=/usr \
@@ -52,7 +52,7 @@ echo "deb http://ftp.debian.org/debian/ jessie main contrib non-free
       --with-pidfile=/var/run/squid.pid
     make -j$(nproc)
     make install
-    wget --no-check-certificate -O /etc/init.d/squid https://hptunnel.xyz/dxplusdev/xxxxxx/squid.sh
+    wget --no-check-certificate -O /etc/init.d/squid https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid.sh
     chmod +x /etc/init.d/squid
     update-rc.d squid defaults
     chown -cR proxy /var/log/squid
@@ -82,8 +82,8 @@ error_directory /usr/share/squid/errors/English' >> squid.conf
     /etc/init.d/squid start
 cd /etc || exit
 
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/monitor' -O /etc/.monitor
-wget 'https://hptunnel.xyz/dxplusdev/xxxxxx/hysteria' -O /etc/.hysteria
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/monitor' -O /etc/.monitor
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/hysteria' -O /etc/.hysteria
 chmod +x /etc/.monitor
 chmod +x /etc/.hysteria
 rm /etc/apt/sources.list
@@ -119,7 +119,7 @@ install_hysteria(){
 clear
 echo 'Installing hysteria.'
 {
-wget -N --no-check-certificate -q -O ~/install_server.sh https://hptunnel.xyz/dxplusdev/xxxxxx/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
+wget -N --no-check-certificate -q -O ~/install_server.sh https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
 
 cat << EOF > /etc/hysteria/hysteria.crt
 Certificate:
@@ -274,7 +274,7 @@ chmod 755 /etc/hysteria/hysteria.crt
 chmod 755 /etc/hysteria/hysteria.key
 chmod 755 /etc/hysteria/.auth.sh
 
-wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 } &>/dev/null
 }
@@ -388,7 +388,7 @@ chmod 755 /etc/zivpn/zivpn.crt
 chmod 755 /etc/zivpn/zivpn.key
 chmod 755 /etc/zivpn/.auth.sh
 
-wget -O /usr/bin/badvpn-udpgw "https://hptunnel.xyz/dxplusdev/xxxxxx/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 
 } &>/dev/null
