@@ -219,7 +219,7 @@ echo '{
   "up_mbps": 100,
   "down_mbps": 100,
   "disable_udp": false,
-  "obfs": "syopawvpn",
+  "obfs": "dxplusdev",
   "auth": {
     "mode": "external",
     "config": {
@@ -232,7 +232,7 @@ echo '{
 }
 ' >> /etc/hysteria/config.json
 
-sed -i "s|mediatekvpn|$OBFS|g" /etc/hysteria/config.json
+sed -i "s|dxplusdev|$OBFS|g" /etc/hysteria/config.json
 
 cat <<\EOM >/etc/hysteria/config.sh
 #!/bin/bash
@@ -292,7 +292,7 @@ installBBR() {
 
 #====================================================
 #	Installing ZI UDP
-#	Finalized: Firenet Developer
+#	Finalized: Dxlusdev Developer
 #====================================================
 
 function install_zi() {
@@ -401,7 +401,7 @@ install_rclocal(){
     
     echo "[Unit]
 Description=firenet service
-Documentation=http://mediatekvpn.com
+Documentation=http://dxplusdev.com
 
 [Service]
 Type=oneshot
