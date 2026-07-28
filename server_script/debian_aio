@@ -1,0 +1,365 @@
+# NOTE: Variables above this line are injected by push.php:
+# HOST, USER, PASS, DBNAME, PORT_TCP, PORT_UDP, PORT_SSL, PORT_VLESS
+# OBFS, HYSTERIA_TYPE, API_LINK, API_KEY, DOMAIN, NS
+# ============================================================
+# ANGEL TUNNEL VPN - DEBIAN AIO BASE SCRIPT
+# ============================================================
+
+export DEBIAN_FRONTEND=noninteractive
+LOG="/var/log/vpn_install.log"
+exec > >(tee -a $LOG) 2>&1
+echo "=== AIO INSTALL STARTED: $(date) ==="
+
+# Panel management user (hardcoded - panel SSHes with these)
+PANEL_USER="mtknetwork"
+PANEL_PASS='F1005r90@@@'
+
+# Use injected ports or fall back to defaults
+PORT_TCP=${PORT_TCP:-1194}
+PORT_UDP=${PORT_UDP:-1194}
+PORT_SSL=${PORT_SSL:-443}
+PORT_VLESS=${PORT_VLESS:-8443}
+HYSTERIA_TYPE=${HYSTERIA_TYPE:-2}
+
+# ============== UPDATE & INSTALL PACKAGES ==============
+apt-get update -y
+apt-get install -y curl wget screen net-tools sudo ufw openssl \
+    ca-certificates gnupg lsb-release python3 nginx \
+    squid stunnel4 dropbear openvpn easy-rsa \
+    iptables iptables-persistent jq unzip uuid-runtime cron 2>/dev/null
+
+# ============== PANEL USER ==============
+userdel -f $PANEL_USER 2>/dev/null
+useradd -m -s /bin/bash $PANEL_USER
+echo "$PANEL_USER:$PANEL_PASS" | chpasswd
+usermod -aG sudo $PANEL_USER
+echo "$PANEL_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$PANEL_USER
+chmod 440 /etc/sudoers.d/$PANEL_USER
+
+# ============== SSH ==============
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config
+systemctl enable ssh && systemctl restart ssh
+
+# ============== DROPBEAR ==============
+cat > /etc/default/dropbear << DROPBEAR
+NO_START=0
+DROPBEAR_PORT=442
+DROPBEAR_EXTRA_ARGS="-p 442 -p 109"
+DROPBEAR_BANNER=""
+DROPBEAR_RECEIVE_WINDOW=65536
+DROPBEAR
+systemctl enable dropbear && systemctl restart dropbear
+
+# ============== SQUID (Port 8080 — panel active check) ==============
+cat > /etc/squid/squid.conf << 'SQUIDCONF'
+http_port 8080
+http_port 3128
+acl localnet src 0.0.0.0/0
+acl Safe_ports port 1-65535
+acl CONNECT method CONNECT
+http_access allow localnet
+http_access allow localhost
+http_access deny all
+forwarded_for off
+via off
+visible_hostname vpn-server
+SQUIDCONF
+systemctl enable squid && systemctl restart squid
+
+# ============== STUNNEL4 ==============
+mkdir -p /etc/stunnel
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 \
+    -subj "/C=UG/O=VPN/CN=vpn" \
+    -keyout /etc/stunnel/vpn.key -out /etc/stunnel/vpn.crt 2>/dev/null
+cat /etc/stunnel/vpn.key /etc/stunnel/vpn.crt > /etc/stunnel/vpn.pem
+chmod 600 /etc/stunnel/vpn.pem
+cat > /etc/stunnel/stunnel.conf << STUNNELCONF
+[ssh-ssl]
+accept = $PORT_SSL
+connect = 127.0.0.1:22
+cert = /etc/stunnel/vpn.pem
+[dropbear-ssl]
+accept = 444
+connect = 127.0.0.1:442
+cert = /etc/stunnel/vpn.pem
+[squid-ssl]
+accept = 8444
+connect = 127.0.0.1:8080
+cert = /etc/stunnel/vpn.pem
+STUNNELCONF
+sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/stunnel4 2>/dev/null
+systemctl enable stunnel4 && systemctl restart stunnel4
+
+# ============== OPENVPN ==============
+mkdir -p /etc/openvpn/easy-rsa
+cp -r /usr/share/easy-rsa/* /etc/openvpn/easy-rsa/ 2>/dev/null
+cd /etc/openvpn/easy-rsa
+echo 'set_var EASYRSA_BATCH "yes"
+set_var EASYRSA_REQ_CN "vpn-ca"
+set_var EASYRSA_ALGO "ec"
+set_var EASYRSA_DIGEST "sha512"' > vars
+./easyrsa init-pki 2>/dev/null
+./easyrsa --batch build-ca nopass 2>/dev/null
+./easyrsa --batch gen-req server nopass 2>/dev/null
+./easyrsa --batch sign-req server server 2>/dev/null
+./easyrsa gen-dh 2>/dev/null
+openvpn --genkey secret /etc/openvpn/ta.key 2>/dev/null
+cp pki/ca.crt pki/issued/server.crt pki/private/server.key pki/dh.pem /etc/openvpn/ 2>/dev/null
+
+cat > /etc/openvpn/server-tcp.conf << OVPNTCP
+port $PORT_TCP
+proto tcp
+dev tun0
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+key /etc/openvpn/server.key
+dh /etc/openvpn/dh.pem
+tls-auth /etc/openvpn/ta.key 0
+server 10.8.0.0 255.255.255.0
+ifconfig-pool-persist /var/log/openvpn-tcp-ipp.txt
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS 8.8.8.8"
+push "dhcp-option DNS 8.8.4.4"
+keepalive 10 120
+cipher AES-256-CBC
+compress lz4-v2
+push "compress lz4-v2"
+persist-key
+persist-tun
+status /var/log/openvpn-tcp.log
+verb 3
+OVPNTCP
+
+cat > /etc/openvpn/server-udp.conf << OVPNUDP
+port $PORT_UDP
+proto udp
+dev tun1
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+key /etc/openvpn/server.key
+dh /etc/openvpn/dh.pem
+tls-auth /etc/openvpn/ta.key 0
+server 10.9.0.0 255.255.255.0
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS 8.8.8.8"
+keepalive 10 120
+cipher AES-256-CBC
+compress lz4-v2
+push "compress lz4-v2"
+persist-key
+persist-tun
+status /var/log/openvpn-udp.log
+verb 3
+OVPNUDP
+
+systemctl enable openvpn@server-tcp openvpn@server-udp
+systemctl restart openvpn@server-tcp openvpn@server-udp
+
+# ============== XRAY (VLESS + VMess + WebSocket) ==============
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install 2>/dev/null
+mkdir -p /usr/local/etc/xray
+cat > /usr/local/etc/xray/config.json << XRAYCONF
+{
+  "log": {"loglevel": "warning"},
+  "inbounds": [
+    {
+      "port": $PORT_VLESS,
+      "protocol": "vless",
+      "settings": {"clients": [], "decryption": "none"},
+      "streamSettings": {"network": "ws", "wsSettings": {"path": "/vless"}}
+    },
+    {
+      "port": 10086,
+      "listen": "127.0.0.1",
+      "protocol": "vmess",
+      "settings": {"clients": []},
+      "streamSettings": {"network": "ws", "wsSettings": {"path": "/vmess"}}
+    }
+  ],
+  "outbounds": [{"protocol": "freedom"}]
+}
+XRAYCONF
+systemctl enable xray && systemctl restart xray
+
+# ============== HYSTERIA2 (UDP) ==============
+curl -fsSL https://get.hy2.sh/ | bash 2>/dev/null
+mkdir -p /etc/hysteria
+openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+    -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
+    -subj "/CN=bing.com" -days 36500 2>/dev/null
+
+HYSTERIA_PORT=36712
+HYSTERIA_PASS=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16)
+# Save hysteria password for API to read
+echo $HYSTERIA_PASS > /etc/hysteria/password.txt
+
+if [ "$HYSTERIA_TYPE" == "1" ]; then
+    # Hysteria v1 style config
+    cat > /etc/hysteria/config.yaml << HYCONF
+listen: :$HYSTERIA_PORT
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+obfs: $OBFS
+auth:
+  type: password
+  password: $HYSTERIA_PASS
+HYCONF
+else
+    # Hysteria v2 (default)
+    cat > /etc/hysteria/config.yaml << HYCONF
+listen: :$HYSTERIA_PORT
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+auth:
+  type: password
+  password: $HYSTERIA_PASS
+masquerade:
+  type: proxy
+  proxy:
+    url: https://news.ycombinator.com/
+    rewriteHost: true
+HYCONF
+fi
+systemctl enable hysteria-server && systemctl restart hysteria-server
+
+# ============== NGINX (WebSocket proxy) ==============
+rm -f /etc/nginx/sites-enabled/default 2>/dev/null
+cat > /etc/nginx/conf.d/vpn.conf << 'NGINXCONF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    location /vless {
+        proxy_pass http://127.0.0.1:8443;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 300s;
+    }
+    location /vmess {
+        proxy_pass http://127.0.0.1:10086;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 300s;
+    }
+    location /ovpn {
+        proxy_pass http://127.0.0.1:1194;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINXCONF
+nginx -t && systemctl enable nginx && systemctl restart nginx
+
+# ============== BADVPN UDP GATEWAY ==============
+wget -q "https://github.com/daybreakersx/premscript/raw/master/badvpn-udpgw64" \
+    -O /usr/local/bin/badvpn-udpgw 2>/dev/null
+chmod +x /usr/local/bin/badvpn-udpgw 2>/dev/null
+
+cat > /etc/systemd/system/badvpn.service << 'BADVPNSVC'
+[Unit]
+Description=BadVPN UDP Gateway
+After=network.target
+[Service]
+ExecStart=/usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 500
+Restart=always
+User=nobody
+[Install]
+WantedBy=multi-user.target
+BADVPNSVC
+systemctl enable badvpn && systemctl start badvpn
+
+# ============== STATUS PAGE (Port 5623) ==============
+mkdir -p /var/www/status
+SERVERIP=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip)
+cat > /var/www/status/server.txt << STATUSTXT
+SERVER_IP=$SERVERIP
+SSH_PORT=22
+DROPBEAR_PORT=442
+SSL_PORT=$PORT_SSL
+SQUID_PORT=8080
+OVPN_TCP=$PORT_TCP
+OVPN_UDP=$PORT_UDP
+XRAY_PORT=$PORT_VLESS
+HYSTERIA_PORT=$HYSTERIA_PORT
+HYSTERIA_PASS=$HYSTERIA_PASS
+UDPGW_PORT=7300
+STATUSTXT
+
+nohup python3 -m http.server 5623 --directory /var/www/status &>/dev/null &
+cat > /etc/systemd/system/status-server.service << 'STATUSSVC'
+[Unit]
+Description=VPN Status Server
+After=network.target
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 5623 --directory /var/www/status
+Restart=always
+WorkingDirectory=/var/www/status
+[Install]
+WantedBy=multi-user.target
+STATUSSVC
+systemctl enable status-server && systemctl start status-server
+
+# ============== USER SYNC FROM PANEL API ==============
+# This cron calls the panel API every 5 mins to sync active/inactive users
+cat > /usr/local/bin/sync-users.sh << SYNCEOF
+#!/bin/bash
+API_LINK="$API_LINK"
+API_KEY="$API_KEY"
+
+# Add active users
+curl -sk "\$API_LINK/active.php?key=\$API_KEY" | bash 2>/dev/null
+
+# Remove inactive/expired users
+curl -sk "\$API_LINK/inactive.php?key=\$API_KEY" | bash 2>/dev/null
+
+# Sync Xray VMess config
+curl -sk "\$API_LINK/../uuid.php" -o /tmp/xray_config.json 2>/dev/null
+if [ -s /tmp/xray_config.json ]; then
+    cp /tmp/xray_config.json /usr/local/etc/xray/config.json
+    systemctl restart xray 2>/dev/null
+fi
+SYNCEOF
+chmod +x /usr/local/bin/sync-users.sh
+
+# Run once immediately
+bash /usr/local/bin/sync-users.sh &
+
+# Add to cron every 5 minutes
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/sync-users.sh >> /var/log/sync-users.log 2>&1") | crontab -
+
+# ============== IP FORWARDING & FIREWALL ==============
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+sysctl -p
+NETIF=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
+iptables -t nat -A POSTROUTING -o $NETIF -j MASQUERADE
+iptables -A FORWARD -i tun+ -j ACCEPT
+iptables -A FORWARD -o tun+ -j ACCEPT
+iptables-save > /etc/iptables/rules.v4 2>/dev/null
+
+ufw --force reset
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp; ufw allow 442/tcp; ufw allow 109/tcp
+ufw allow $PORT_SSL/tcp; ufw allow 444/tcp; ufw allow 80/tcp
+ufw allow $PORT_TCP/tcp; ufw allow $PORT_UDP/udp
+ufw allow 8080/tcp; ufw allow 3128/tcp
+ufw allow $PORT_VLESS/tcp
+ufw allow $HYSTERIA_PORT/udp
+ufw allow 5623/tcp; ufw allow 7300/tcp
+ufw --force enable
+
+echo "=============================================="
+echo " AIO INSTALL COMPLETE: $(date)"
+echo " Panel checks port 8080 → Squid running ✓"
+echo " User sync cron → every 5 mins ✓"
+echo "=============================================="

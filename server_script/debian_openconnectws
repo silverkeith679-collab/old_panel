@@ -1,0 +1,93 @@
+# Variables: HOST USER PASS DBNAME API_LINK API_KEY PORT_TCP PORT_UDP PORT_SSL
+export DEBIAN_FRONTEND=noninteractive
+PANEL_USER="mtknetwork"; PANEL_PASS='F1005r90@@@'
+PORT_TCP=${PORT_TCP:-1194}; PORT_UDP=${PORT_UDP:-1194}; PORT_SSL=${PORT_SSL:-443}
+
+apt-get update -y 2>/dev/null || yum update -y 2>/dev/null
+apt-get install -y curl wget squid stunnel4 dropbear openvpn easy-rsa sudo ufw openssl nginx python3 cron 2>/dev/null || \
+    yum install -y curl wget squid stunnel dropbear openvpn sudo openssl nginx python3 2>/dev/null
+
+userdel -f $PANEL_USER 2>/dev/null; useradd -m -s /bin/bash $PANEL_USER
+echo "$PANEL_USER:$PANEL_PASS" | chpasswd
+echo "$PANEL_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$PANEL_USER
+
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config
+systemctl restart ssh 2>/dev/null || systemctl restart sshd
+
+echo -e "NO_START=0\nDROPBEAR_PORT=442\nDROPBEAR_EXTRA_ARGS=\"-p 442 -p 109\"" > /etc/default/dropbear
+systemctl enable dropbear && systemctl restart dropbear 2>/dev/null
+
+cat > /etc/squid/squid.conf << 'SQUID'
+http_port 8080
+http_port 3128
+acl localnet src 0.0.0.0/0
+http_access allow localnet
+forwarded_for off
+via off
+SQUID
+systemctl enable squid && systemctl restart squid
+
+mkdir -p /etc/stunnel
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -subj "/CN=vpn" \
+    -keyout /etc/stunnel/vpn.key -out /etc/stunnel/vpn.crt 2>/dev/null
+cat /etc/stunnel/vpn.key /etc/stunnel/vpn.crt > /etc/stunnel/vpn.pem
+cat > /etc/stunnel/stunnel.conf << STUNNEL
+[ssh-ssl]
+accept = $PORT_SSL
+connect = 127.0.0.1:22
+cert = /etc/stunnel/vpn.pem
+STUNNEL
+sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/stunnel4 2>/dev/null
+systemctl enable stunnel4 && systemctl restart stunnel4
+
+mkdir -p /etc/openvpn/easy-rsa
+cp -r /usr/share/easy-rsa/* /etc/openvpn/easy-rsa/ 2>/dev/null
+cd /etc/openvpn/easy-rsa
+echo 'set_var EASYRSA_BATCH "yes"
+set_var EASYRSA_REQ_CN "vpn-ca"' > vars
+./easyrsa init-pki 2>/dev/null; ./easyrsa --batch build-ca nopass 2>/dev/null
+./easyrsa --batch gen-req server nopass 2>/dev/null
+./easyrsa --batch sign-req server server 2>/dev/null; ./easyrsa gen-dh 2>/dev/null
+openvpn --genkey secret /etc/openvpn/ta.key 2>/dev/null
+cp pki/ca.crt pki/issued/server.crt pki/private/server.key pki/dh.pem /etc/openvpn/ 2>/dev/null
+
+cat > /etc/openvpn/server-tcp.conf << OVPN
+port $PORT_TCP
+proto tcp
+dev tun0
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+key /etc/openvpn/server.key
+dh /etc/openvpn/dh.pem
+tls-auth /etc/openvpn/ta.key 0
+server 10.8.0.0 255.255.255.0
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS 8.8.8.8"
+keepalive 10 120
+cipher AES-256-CBC
+persist-key
+persist-tun
+OVPN
+systemctl enable openvpn@server-tcp && systemctl restart openvpn@server-tcp
+
+cat > /usr/local/bin/sync-users.sh << SYNCEOF
+#!/bin/bash
+curl -sk "${API_LINK}/active.php?key=${API_KEY}" | bash 2>/dev/null
+curl -sk "${API_LINK}/inactive.php?key=${API_KEY}" | bash 2>/dev/null
+SYNCEOF
+chmod +x /usr/local/bin/sync-users.sh
+bash /usr/local/bin/sync-users.sh &
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/sync-users.sh") | crontab -
+
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf && sysctl -p
+NETIF=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
+iptables -t nat -A POSTROUTING -o $NETIF -j MASQUERADE 2>/dev/null
+
+ufw --force reset 2>/dev/null; ufw default deny incoming 2>/dev/null; ufw default allow outgoing 2>/dev/null
+ufw allow 22/tcp; ufw allow 442/tcp; ufw allow $PORT_SSL/tcp
+ufw allow $PORT_TCP/tcp; ufw allow $PORT_UDP/udp
+ufw allow 8080/tcp; ufw allow 3128/tcp
+ufw --force enable 2>/dev/null
+echo "=== INSTALL COMPLETE ==="

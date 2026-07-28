@@ -1,0 +1,55 @@
+# Variables: HOST USER PASS DBNAME OBFS HYSTERIA_TYPE
+export DEBIAN_FRONTEND=noninteractive
+PANEL_USER="mtknetwork"; PANEL_PASS='F1005r90@@@'
+HYSTERIA_PORT=36712
+
+apt-get update -y 2>/dev/null || yum update -y 2>/dev/null
+apt-get install -y curl wget squid sudo ufw openssl python3 2>/dev/null || \
+    yum install -y curl wget squid sudo openssl python3 2>/dev/null
+
+userdel -f $PANEL_USER 2>/dev/null; useradd -m -s /bin/bash $PANEL_USER
+echo "$PANEL_USER:$PANEL_PASS" | chpasswd
+echo "$PANEL_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$PANEL_USER
+
+cat > /etc/squid/squid.conf << 'SQUID'
+http_port 8080
+http_port 3128
+acl localnet src 0.0.0.0/0
+http_access allow localnet
+forwarded_for off
+via off
+SQUID
+systemctl enable squid && systemctl restart squid
+
+curl -fsSL https://get.hy2.sh/ | bash 2>/dev/null
+mkdir -p /etc/hysteria
+openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+    -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
+    -subj "/CN=bing.com" -days 36500 2>/dev/null
+HPASS=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16)
+echo $HPASS > /etc/hysteria/password.txt
+
+OBFS_LINE=""
+[ -n "$OBFS" ] && OBFS_LINE="obfs: $OBFS"
+
+cat > /etc/hysteria/config.yaml << HYCONF
+listen: :$HYSTERIA_PORT
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+auth:
+  type: password
+  password: $HPASS
+$OBFS_LINE
+masquerade:
+  type: proxy
+  proxy:
+    url: https://news.ycombinator.com/
+    rewriteHost: true
+HYCONF
+systemctl enable hysteria-server && systemctl restart hysteria-server
+
+ufw --force reset 2>/dev/null; ufw default deny incoming 2>/dev/null; ufw default allow outgoing 2>/dev/null
+ufw allow 22/tcp; ufw allow 8080/tcp; ufw allow 3128/tcp; ufw allow $HYSTERIA_PORT/udp
+ufw --force enable 2>/dev/null
+echo "=== HYSTERIA2 INSTALL COMPLETE. Password: $HPASS ==="

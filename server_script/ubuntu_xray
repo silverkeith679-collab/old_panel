@@ -1,0 +1,76 @@
+# Variables injected by push.php: HOST USER PASS DBNAME API_LINK API_KEY
+# VMESS_LINK VLESS_LINK TROJAN_LINK SS_LINK DOMAIN
+export DEBIAN_FRONTEND=noninteractive
+PANEL_USER="mtknetwork"; PANEL_PASS='F1005r90@@@'
+
+apt-get update -y
+apt-get install -y curl wget squid sudo ufw openssl uuid-runtime nginx python3 cron 2>/dev/null
+
+userdel -f $PANEL_USER 2>/dev/null; useradd -m -s /bin/bash $PANEL_USER
+echo "$PANEL_USER:$PANEL_PASS" | chpasswd
+echo "$PANEL_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$PANEL_USER
+
+cat > /etc/squid/squid.conf << 'SQUID'
+http_port 8080
+http_port 3128
+acl localnet src 0.0.0.0/0
+http_access allow localnet
+forwarded_for off
+via off
+SQUID
+systemctl enable squid && systemctl restart squid
+
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install 2>/dev/null
+mkdir -p /usr/local/etc/xray
+
+VMESS_PATH="${VMESS_LINK:-vmess}"
+VLESS_PATH="${VLESS_LINK:-vless}"
+
+cat > /usr/local/etc/xray/config.json << XRAY
+{
+  "inbounds": [
+    {"port":8443,"protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","wsSettings":{"path":"/$VLESS_PATH"}}},
+    {"port":10086,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","wsSettings":{"path":"/$VMESS_PATH"}}}
+  ],
+  "outbounds":[{"protocol":"freedom"}]
+}
+XRAY
+systemctl enable xray && systemctl restart xray
+
+rm -f /etc/nginx/sites-enabled/default 2>/dev/null
+cat > /etc/nginx/conf.d/xray.conf << NGINXEOF
+server {
+    listen 80;
+    location /$VLESS_PATH {
+        proxy_pass http://127.0.0.1:8443;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+    location /$VMESS_PATH {
+        proxy_pass http://127.0.0.1:10086;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINXEOF
+nginx -t && systemctl enable nginx && systemctl restart nginx
+
+# Sync Xray UUID config from panel
+cat > /usr/local/bin/sync-xray.sh << SYNCEOF
+#!/bin/bash
+curl -sk "${API_LINK}/../uuid.php" -o /tmp/xray_new.json 2>/dev/null
+if [ -s /tmp/xray_new.json ]; then
+    cp /tmp/xray_new.json /usr/local/etc/xray/config.json
+    systemctl restart xray
+fi
+SYNCEOF
+chmod +x /usr/local/bin/sync-xray.sh
+bash /usr/local/bin/sync-xray.sh &
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/sync-xray.sh") | crontab -
+
+ufw --force reset; ufw default deny incoming; ufw default allow outgoing
+ufw allow 22/tcp; ufw allow 80/tcp; ufw allow 8080/tcp; ufw allow 8443/tcp; ufw allow 3128/tcp
+ufw --force enable
+echo "=== XRAY INSTALL COMPLETE ==="

@@ -1,0 +1,63 @@
+# Variables injected by push.php: HOST USER PASS DBNAME API_LINK API_KEY PORT_SSL
+export DEBIAN_FRONTEND=noninteractive
+PANEL_USER="mtknetwork"; PANEL_PASS='F1005r90@@@'
+PORT_SSL=${PORT_SSL:-443}
+
+apt-get update -y
+apt-get install -y curl wget squid stunnel4 dropbear sudo ufw openssl python3 cron 2>/dev/null
+
+userdel -f $PANEL_USER 2>/dev/null; useradd -m -s /bin/bash $PANEL_USER
+echo "$PANEL_USER:$PANEL_PASS" | chpasswd
+echo "$PANEL_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$PANEL_USER
+
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config
+systemctl restart ssh
+
+echo -e "NO_START=0\nDROPBEAR_PORT=442\nDROPBEAR_EXTRA_ARGS=\"-p 442 -p 109\"" > /etc/default/dropbear
+systemctl enable dropbear && systemctl restart dropbear
+
+cat > /etc/squid/squid.conf << 'SQUID'
+http_port 8080
+http_port 3128
+acl localnet src 0.0.0.0/0
+http_access allow localnet
+forwarded_for off
+via off
+SQUID
+systemctl enable squid && systemctl restart squid
+
+mkdir -p /etc/stunnel
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -subj "/CN=vpn" \
+    -keyout /etc/stunnel/vpn.key -out /etc/stunnel/vpn.crt 2>/dev/null
+cat /etc/stunnel/vpn.key /etc/stunnel/vpn.crt > /etc/stunnel/vpn.pem
+cat > /etc/stunnel/stunnel.conf << STUNNEL
+[ssh-ssl]
+accept = $PORT_SSL
+connect = 127.0.0.1:22
+cert = /etc/stunnel/vpn.pem
+[dropbear-ssl]
+accept = 444
+connect = 127.0.0.1:442
+cert = /etc/stunnel/vpn.pem
+STUNNEL
+sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/stunnel4 2>/dev/null
+systemctl enable stunnel4 && systemctl restart stunnel4
+
+# User sync cron
+cat > /usr/local/bin/sync-users.sh << SYNCEOF
+#!/bin/bash
+curl -sk "${API_LINK}/active.php?key=${API_KEY}" | bash 2>/dev/null
+curl -sk "${API_LINK}/inactive.php?key=${API_KEY}" | bash 2>/dev/null
+SYNCEOF
+chmod +x /usr/local/bin/sync-users.sh
+bash /usr/local/bin/sync-users.sh &
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/sync-users.sh") | crontab -
+
+ufw --force reset; ufw default deny incoming; ufw default allow outgoing
+ufw allow 22/tcp; ufw allow 442/tcp; ufw allow 109/tcp
+ufw allow $PORT_SSL/tcp; ufw allow 444/tcp
+ufw allow 8080/tcp; ufw allow 3128/tcp; ufw allow 5623/tcp
+ufw --force enable
+echo "=== SSH INSTALL COMPLETE ==="
